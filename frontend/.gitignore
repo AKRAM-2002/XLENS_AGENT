@@ -1,0 +1,45 @@
+# Node.js Dependencies
+node_modules/
+
+# Build Output
+.next/
+dist/
+build/
+
+# Environment Files
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-Specific Files
+.DS_Store           # macOS
+Thumbs.db           # Windows
+.idea/              # JetBrains IDEs (optional)
+.vscode/            # Visual Studio Code settings (optional)
+
+# Temporary Files
+*.tmp
+*.swp
+*.swo
+*.bak
+
+# Lint and Testing
+coverage/           # Test coverage reports
+.nyc_output/        # NYC coverage tool output
+
+# Generated Files
+package-lock.json   # If using Yarn, include yarn.lock instead
+yarn.lock           # If using npm, include package-lock.json instead
+*.tsbuildinfo       # TypeScript build info files
+
+# Cache
+.cache/
+.next/cache/
+.cache-loader/

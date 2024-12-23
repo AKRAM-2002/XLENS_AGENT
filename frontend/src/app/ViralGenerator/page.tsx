@@ -2,63 +2,65 @@
 import { useState } from 'react';
 import axios from 'axios';
 import { Sparkles, Loader2 } from 'lucide-react';
+import { FeatureLayout } from '@/components/FeatureLayout';
 
+
+// Viral Generator Component
 function ViralGenerator() {
   const [result, setResult] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [tweetStatus, setTweetStatus] = useState<{ [key: number]: string }>({});
 
   const generateThread = async () => {
-    setLoading(true);
-    try {
-      const response = await axios.get('http://localhost:8000/viral');
-      setResult(response.data.viral_tweets);
-    } catch (error) {
-      console.error('Error:', error);
-      setResult([]);
-    }
-    setLoading(false);
-  };
-
-  const handleTweet = async (tweetContent: string, index: number) => {
-    try {
-      setTweetStatus(prev => ({ ...prev, [index]: 'sending' }));
-      const response = await axios.post('http://localhost:8000/tweet', { tweet: tweetContent });
-      console.log('Tweet response:', response.data);
-      setTweetStatus(prev => ({ 
-        ...prev, 
-        [index]: response.data.message || 'Success!'
-      }));
-      // Clear status after 3 seconds
-      setTimeout(() => {
-        setTweetStatus(prev => {
-          const newStatus = { ...prev };
-          delete newStatus[index];
-          return newStatus;
-        });
-      }, 3000);
-    } catch (error) {
-      console.error('Tweet error:', error);
-      setTweetStatus(prev => ({ 
-        ...prev, 
-        [index]: error.response?.data?.detail || 'Failed to tweet'
-      }));
-    }
-  };
+      setLoading(true);
+      try {
+        const response = await axios.get('http://localhost:8000/viral');
+        setResult(response.data.viral_tweets);
+      } catch (error) {
+        console.error('Error:', error);
+        setResult([]);
+      }
+      setLoading(false);
+    };
+  
+    const handleTweet = async (tweetContent: string, index: number) => {
+      try {
+        setTweetStatus(prev => ({ ...prev, [index]: 'sending' }));
+        const response = await axios.post('http://localhost:8000/tweet', { tweet: tweetContent });
+        console.log('Tweet response:', response.data);
+        setTweetStatus(prev => ({ 
+          ...prev, 
+          [index]: response.data.message || 'Success!'
+        }));
+        // Clear status after 3 seconds
+        setTimeout(() => {
+          setTweetStatus(prev => {
+            const newStatus = { ...prev };
+            delete newStatus[index];
+            return newStatus;
+          });
+        }, 3000);
+      } catch (error) {
+        console.error('Tweet error:', error);
+        setTweetStatus(prev => ({ 
+          ...prev, 
+          [index]: error.response?.data?.detail || 'Failed to tweet'
+        }));
+      }
+    };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-12">
+    <FeatureLayout
+      icon={<Sparkles />}
+      title="Viral Tweet Generator"
+      description="Create engaging tweets that go viral"
+      gradient="from-purple-600 to-pink-500"
+    >
       <div className="text-center mb-8">
-        <Sparkles className="h-12 w-12 text-purple-500 mx-auto mb-4" />
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Viral Tweet Generator</h1>
-        <p className="text-gray-600">Create engaging tweets that go viral</p>
-      </div>
-
-      <div className="text-center">
         <button
           onClick={generateThread}
           disabled={loading}
-          className="bg-purple-500 text-white py-3 px-8 rounded-lg font-medium hover:bg-purple-600 transition-colors disabled:bg-purple-300 inline-flex items-center"
+          className="bg-gradient-to-r from-purple-600 to-pink-500 text-white py-3 px-8 rounded-xl font-medium hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center shadow-md"
         >
           {loading ? (
             <>
@@ -76,12 +78,12 @@ function ViralGenerator() {
           {result.map((tweet, index) => (
             <div 
               key={index}
-              className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-shadow"
+              className="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition-all"
             >
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center">
-                    <span className="text-purple-600 font-semibold">{index + 1}</span>
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-r from-purple-600 to-pink-500 flex items-center justify-center text-white">
+                    <span className="font-semibold">{index + 1}</span>
                   </div>
                 </div>
                 <div className="flex-1">
@@ -108,7 +110,6 @@ function ViralGenerator() {
                         {tweetStatus[index]}
                       </span>
                     )}
-                
                   </div>
                 </div>
               </div>
@@ -116,8 +117,7 @@ function ViralGenerator() {
           ))}
         </div>
       )}
-    </div>
+    </FeatureLayout>
   );
 }
-
 export default ViralGenerator;

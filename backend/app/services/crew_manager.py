@@ -1,135 +1,124 @@
 # backend/app/services/crew_manager.py
-from crewai import Agent, Task, Crew, Process
-from langchain_community.llms import Ollama
-from typing import Dict
-from app.core.settings import get_settings
+from crewai import Agent, Task, Crew
+from .ollama_client import OllamaClient
+from app.api.models.schemas import (
+    AnalysisResponse, 
+    GenerationResponse, 
+    TrendingTopic
+)
+import json
 
-settings = get_settings()
-
-class TruthTerminalCrew:
+class CrewManager:
     def __init__(self):
-        self.llm = Ollama(
-            base_url=settings.OLLAMA_BASE_URL,
-            model=settings.OLLAMA_MODEL
-        )
-        
-        self.fact_checker = Agent(
-            role='Fact Checker',
-            goal='Thoroughly verify the accuracy of tweet claims',
-            backstory="""You are an expert fact checker with years of experience 
-            in digital journalism and social media verification.""",
-            llm=self.llm,
-            verbose=True
-        )
-        
-        self.sentiment_analyzer = Agent(
-            role='Sentiment Analyzer',
-            goal='Analyze the emotional tone and impact of tweets',
-            backstory="""You are an expert in sentiment analysis and emotional 
-            intelligence, specializing in social media content.""",
-            llm=self.llm,
-            verbose=True
-        )
-        
-        self.content_strategist = Agent(
-            role='Viral Content Strategist',
-            goal='Generate engaging viral tweet content',
-            backstory="""You are a social media expert who understands what makes 
-            content go viral.""",
-            llm=self.llm,
-            verbose=True
+        self.ollama_client = OllamaClient()
+        self.llm = self.ollama_client.get_llm()
+
+    def _create_agents(self):
+        fact_check_agent = Agent(
+            role="Fact-Checker",
+            goal="Verify the claims in a given tweet and provide their accuracy with evidence.",
+            backstory="You are a highly accurate fact-checker trained to evaluate statements and provide verified and unverified claims with evidence.",
+            llm=self.llm
         )
 
-    async def analyze_tweet(self, tweet_text: str) -> Dict:
+        sentiment_agent = Agent(
+            role="Sentiment Analyzer",
+            goal="Analyze the sentiment of the given tweet and provide tone, emotional triggers, and the potential impact.",
+            backstory="You are a sentiment analysis expert who accurately identifies the tone and emotional context of statements.",
+            llm=self.llm
+        )
+
+        content_generator_agent = Agent(
+            role="Content Generator",
+            goal="Generate engaging and viral tweets based on given parameters.",
+            backstory="You are an expert content creator who understands viral content patterns and audience engagement.",
+            llm=self.llm
+        )
+
+        return fact_check_agent, sentiment_agent, content_generator_agent
+
+    def _create_tasks(self, tweet_text: str, fact_check_agent: Agent, sentiment_agent: Agent):
         fact_check_task = Task(
-            description=f"""Analyze this tweet for factual accuracy:
-            '{tweet_text}'
-            
-            1. Identify all factual claims
-            2. Verify each claim
-            3. Rate accuracy on a scale of 1-10
-            4. Provide evidence for your conclusions
-            5. Return results as a structured dictionary
-            """,
-            agent=self.fact_checker
+            description=f'Fact-check the following tweet: "{tweet_text}"',
+            expected_output="A JSON object containing accuracy_score, verified_claims, unverified_claims, and evidence.",
+            agent=fact_check_agent
         )
 
         sentiment_task = Task(
-            description=f"""Analyze the sentiment of this tweet:
-            '{tweet_text}'
-            
-            1. Determine overall emotional tone
-            2. Identify emotional triggers
-            3. Assess potential audience impact
-            4. Rate sentiment on scale (-1 to 1)
-            5. Return results as a structured dictionary
-            """,
-            agent=self.sentiment_analyzer
+            description=f'Analyze the sentiment of the following tweet: "{tweet_text}"',
+            expected_output="A JSON object containing score, tone, emotional_triggers, and potential_impact.",
+            agent=sentiment_agent
         )
 
+        return fact_check_task, sentiment_task
+
+    def _create_generation_task(self, topic: str, tone: str, target_audience: str, content_generator_agent: Agent):
+        return Task(
+            description=f'Generate a viral tweet about {topic} with {tone} tone for {target_audience}',
+            expected_output="A JSON object containing tweet_text, engagement_score, hashtags, and best_posting_time.",
+            agent=content_generator_agent
+        )
+
+    def analyze_tweet(self, tweet_text: str) -> AnalysisResponse:
+        fact_check_agent, sentiment_agent = self._create_agents()
+        
+
+        fact_check_task = Task(
+            description=f"""Fact-check the following tweet and return a JSON object: "{tweet_text}"
+            The JSON must have exactly these fields:
+            {{
+                "accuracy_score": (float between 0-1),
+                "verified_claims": [list of strings],
+                "unverified_claims": [list of strings],
+                "evidence": {{key: value pairs of claims and evidence}}
+            }}""",
+            agent=fact_check_agent
+        )
+
+        sentiment_task = Task(
+            description=f"""Analyze the sentiment of the following tweet and return a JSON object: "{tweet_text}"
+            The JSON must have exactly these fields:
+            {{
+                "score": (float between 0-1),
+                "tone": (string),
+                "emotional_triggers": [list of strings],
+                "potential_impact": (string)
+            }}""",
+            agent=sentiment_agent
+        )
+        
+
         crew = Crew(
-            agents=[self.fact_checker, self.sentiment_analyzer],
+            agents=[fact_check_agent, sentiment_agent],
             tasks=[fact_check_task, sentiment_task],
-            verbose=2,
-            process=Process.sequential
+            verbose=True
         )
 
-        result = await crew.kickoff()
-        return self._parse_analysis_result(result)
+        result = crew.kickoff()
+        
+        try:
+            parsed_result = json.loads(result)
+            return AnalysisResponse(**parsed_result)
+        except json.JSONDecodeError:
+            raise ValueError("Failed to parse crew response")
 
-    async def generate_viral_tweet(self, topic: str, tone: str, target_audience: str) -> Dict:
-        generation_task = Task(
-            description=f"""Generate a viral tweet about {topic}:
+    async def generate_viral_tweet(self, topic: str, tone: str, target_audience: str) -> GenerationResponse:
+            _, _, content_generator_agent = self._create_agents()
+            generation_task = self._create_generation_task(
+                topic, tone, target_audience, content_generator_agent
+            )
+    
+            crew = Crew(
+                agents=[content_generator_agent],
+                tasks=[generation_task],
+                verbose=True
+            )
+    
+            result = crew.kickoff()
             
-            Parameters:
-            - Topic: {topic}
-            - Desired tone: {tone}
-            - Target audience: {target_audience}
-            
-            Requirements:
-            1. Must be engaging and shareable
-            2. Maintain authenticity
-            3. Include relevant hashtags
-            4. Stay within Twitter's character limit
-            5. Consider audience psychology
-            
-            Return the tweet and engagement metrics prediction.
-            """,
-            agent=self.content_strategist
-        )
-
-        crew = Crew(
-            agents=[self.content_strategist],
-            tasks=[generation_task],
-            verbose=2
-        )
-
-        result = await crew.kickoff()
-        return self._parse_generation_result(result)
-
-    def _parse_analysis_result(self, result: str) -> Dict:
-        # Add parsing logic here
-        return {
-            "fact_check": {
-                "accuracy_score": 8.5,
-                "verified_claims": [],
-                "unverified_claims": [],
-                "evidence": {}
-            },
-            "sentiment": {
-                "score": 0.75,
-                "tone": "positive",
-                "emotional_triggers": [],
-                "potential_impact": ""
-            }
-        }
-
-    def _parse_generation_result(self, result: str) -> Dict:
-        # Add parsing logic here
-        return {
-            "tweet": result.strip(),
-            "metrics": {
-                "engagement_score": 0.85,
-                "viral_potential": 0.75
-            }
-        }
+            try:
+                parsed_result = json.loads(result)
+                return GenerationResponse(**parsed_result)
+            except json.JSONDecodeError:
+                raise ValueError("Failed to parse generation response")
+    

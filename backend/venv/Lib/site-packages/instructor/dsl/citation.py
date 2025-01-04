@@ -1,5 +1,5 @@
-from pydantic import BaseModel, Field, FieldValidationInfo, model_validator
-from typing import List
+from pydantic import BaseModel, Field, model_validator, ValidationInfo
+from collections.abc import Generator
 
 
 class CitationMixin(BaseModel):
@@ -53,12 +53,12 @@ class CitationMixin(BaseModel):
 
     """
 
-    substring_quotes: List[str] = Field(
+    substring_quotes: list[str] = Field(
         description="List of unique and specific substrings of the quote that was used to answer the question.",
     )
 
-    @model_validator(mode="after")
-    def validate_sources(self, info: FieldValidationInfo) -> "CitationMixin":
+    @model_validator(mode="after")  # type: ignore[misc]
+    def validate_sources(self, info: ValidationInfo) -> "CitationMixin":
         """
         For each substring_phrase, find the span of the substring_phrase in the context.
         If the span is not found, remove the substring_phrase from the list.
@@ -75,7 +75,9 @@ class CitationMixin(BaseModel):
         self.substring_quotes = [text_chunks[span[0] : span[1]] for span in spans]
         return self
 
-    def _get_span(self, quote, context, errs=5):
+    def _get_span(
+        self, quote: str, context: str, errs: int = 5
+    ) -> Generator[tuple[int, int], None, None]:
         import regex
 
         minor = quote
@@ -90,6 +92,6 @@ class CitationMixin(BaseModel):
         if s is not None:
             yield from s.spans()
 
-    def get_spans(self, context):
+    def get_spans(self, context: str) -> Generator[tuple[int, int], None, None]:
         for quote in self.substring_quotes:
             yield from self._get_span(quote, context)

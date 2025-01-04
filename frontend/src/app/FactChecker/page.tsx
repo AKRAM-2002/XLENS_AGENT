@@ -30,7 +30,7 @@ function FactChecker() {
     }
     
     try {
-      const response = await axios.post('http://localhost:8000/facts', formData, {
+      const response = await axios.post('http://localhost:8000/api/v1/tweets/analyze', formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(response.data.Fact_description);

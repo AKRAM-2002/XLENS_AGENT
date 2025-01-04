@@ -1,11 +1,15 @@
 # backend/app/api/endpoints/generate.py
-from fastapi import APIRouter, HTTPException, Depends
-from app.api.models.schemas import TweetGenerationRequest, GenerationResponse
-from app.services.crew_manager import TruthTerminalCrew
+from fastapi import APIRouter, HTTPException
+from app.api.models.schemas import (
+    TweetGenerationRequest, 
+    GenerationResponse,
+    TrendingTopic
+)
+from app.services.crew_manager import CrewManager
 from typing import List, Optional
 
 router = APIRouter()
-crew_manager = TruthTerminalCrew()
+crew_manager = CrewManager()
 
 @router.post("/generate", response_model=GenerationResponse)
 async def generate_tweet(request: TweetGenerationRequest):
@@ -33,7 +37,7 @@ async def generate_tweet(request: TweetGenerationRequest):
             detail=f"Error generating tweet: {str(e)}"
         )
 
-@router.post("/generate-batch")
+@router.post("/generate-batch", response_model=List[GenerationResponse])
 async def generate_multiple_tweets(
     request: TweetGenerationRequest,
     count: Optional[int] = 3
@@ -64,7 +68,7 @@ async def generate_multiple_tweets(
             detail=f"Error generating multiple tweets: {str(e)}"
         )
 
-@router.get("/trending-topics")
+@router.get("/trending-topics", response_model=List[TrendingTopic])
 async def get_trending_topics():
     """
     Get current trending topics for tweet generation.
@@ -73,10 +77,8 @@ async def get_trending_topics():
         List of trending topics with engagement metrics
     """
     # Placeholder for trending topics integration
-    return {
-        "trending_topics": [
-            {"topic": "AI Technology", "engagement_score": 0.95},
-            {"topic": "Climate Action", "engagement_score": 0.88},
-            {"topic": "Remote Work", "engagement_score": 0.82}
-        ]
-    }
+    return [
+        TrendingTopic(topic="AI Technology", engagement_score=0.95),
+        TrendingTopic(topic="Climate Action", engagement_score=0.88),
+        TrendingTopic(topic="Remote Work", engagement_score=0.82)
+    ]

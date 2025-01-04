@@ -1,4 +1,5 @@
-from typing import Any, List
+from pathlib import Path
+from typing import Any, List, Union
 
 from langchain_community.document_loaders.unstructured import (
     UnstructuredFileLoader,
@@ -31,7 +32,10 @@ class UnstructuredODTLoader(UnstructuredFileLoader):
     """
 
     def __init__(
-        self, file_path: str, mode: str = "single", **unstructured_kwargs: Any
+        self,
+        file_path: Union[str, Path],
+        mode: str = "single",
+        **unstructured_kwargs: Any,
     ):
         """
 
@@ -47,4 +51,4 @@ class UnstructuredODTLoader(UnstructuredFileLoader):
     def _get_elements(self) -> List:
         from unstructured.partition.odt import partition_odt
 
-        return partition_odt(filename=self.file_path, **self.unstructured_kwargs)
+        return partition_odt(filename=self.file_path, **self.unstructured_kwargs)  # type: ignore[arg-type]

@@ -3,43 +3,65 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { CheckCircle, Loader2, Upload, Image } from 'lucide-react';
+import type { TweetAnalysis } from '@/services/api/types';
 
 function FactChecker() {
   const [inputType, setInputType] = useState<"text" | "url" | "image">("text");
   const [input, setInput] = useState("");
   const [image, setImage] = useState<File | null>(null);
   const [includeComments, setIncludeComments] = useState(false);
-  const [result, setResult] = useState("");
+  const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false);
-
+  const [error, setError] = useState<string | null>(null);
+  
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
+
     
-    const formData = new FormData();
+    // const formData = new FormData();
     
-    if (inputType === "image" && image) {
-      formData.append("image", image);
-      formData.append("includeComments", String(includeComments));
-    } else if (inputType === "url") {
-      formData.append("url", input);
-      formData.append("includeComments", String(includeComments));
-    } else if (inputType === "text") {
-      formData.append("text", input);
-      formData.append("includeComments", String(includeComments));
-    }
+    // if (inputType === "image" && image) {
+    //   formData.append("image", image);
+    //   formData.append("includeComments", String(includeComments));
+    // } else if (inputType === "url") {
+    //   formData.append("url", input);
+    //   formData.append("includeComments", String(includeComments));
+    // } else if (inputType === "text") {
+    //   formData.append("text", input);
+    //   formData.append("includeComments", String(includeComments));
+    // }
     
+    // try {
+    //   const response = await axios.post('http://localhost:8000/api/v1/tweets/analyze', formData, {
+    //     headers: { "Content-Type": "multipart/form-data" },
+    //   });
+    //   setResult(response.data.Fact_description);
+    // } catch (error) {
+    //   console.error("Error during fact-checking:", error);
+    //   setResult(error.response?.data?.error || "An error occurred. Please try again.");
+    // }
+    
+    // setLoading(false);
+
     try {
-      const response = await axios.post('http://localhost:8000/api/v1/tweets/analyze', formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      setResult(response.data.Fact_description);
-    } catch (error) {
-      console.error("Error during fact-checking:", error);
-      setResult(error.response?.data?.error || "An error occurred. Please try again.");
+      // let analysis: TweetAnalysis;
+      
+      // if (inputType === "image" && image) {
+      //   analysis = await tweetService.uploadTweetImage(image);
+      // } else {
+      //   analysis = await tweetService.analyzeTweet(input);
+      // }
+      const response = await axios.post('http://localhost:8000/api/fact-check', { tweet_text: input });
+      setResult(response.data);
+      // setResult(analysis);
+    } catch (err: any) {
+      setError(err.response?.data?.detail || 'An error occurred while fact-checking the tweet');
+      setResult(null);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,14 +185,36 @@ function FactChecker() {
             </button>
           </form>
 
-          {result && (
-            <div className="mt-8 border-t pt-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">Results:</h2>
-              <div className="bg-gray-50 rounded-xl p-6">
-                <p className="text-gray-700 whitespace-pre-wrap">{result}</p>
-              </div>
+          {error && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-xl mt-4">
+              <p>{error}</p>
+              <button 
+                onClick={() => setError(null)}
+                className="mt-2 text-blue-600 hover:underline"
+              >
+                Try Again
+              </button>
             </div>
           )}
+
+          {result && (
+              <div className="mt-8 border-t pt-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Fact Check Results:</h2>
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <p><strong>Accuracy Score:</strong> {result.accuracy_score}</p>
+                  <p><strong>Verified Claims:</strong> {result.verified_claims.join(', ')}</p>
+                  <p><strong>Unverified Claims:</strong> {result.unverified_claims.join(', ')}</p>
+                  <div>
+                    <strong>Evidence:</strong>
+                    <ul>
+                      {Object.entries(result.evidence).map(([claim, evidence], index) => (
+                        <li key={index}>{claim}: {evidence}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
         </div>
       </div>
     </div>

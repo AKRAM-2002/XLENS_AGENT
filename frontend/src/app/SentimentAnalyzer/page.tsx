@@ -14,8 +14,9 @@ function SentimentAnalyzer() {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:8000/sentiment', { tweet });
-      setResult(response.data.sentiment_description);
+      const response = await axios.post('http://localhost:8000/api/sentiment-analysis', { tweet_text: tweet });
+      
+      setResult(response.data);
     } catch (error) {
       console.error('Error:', error);
       setResult('Error analyzing sentiment. Please try again.');
@@ -56,12 +57,21 @@ function SentimentAnalyzer() {
             )}
           </button>
         </form>
-
+            
         {result && (
           <div className="mt-8 border-t pt-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Analysis Results:</h2>
             <div className="bg-gray-50 rounded-xl p-6">
-              <p className="text-gray-700 whitespace-pre-wrap">{result}</p>
+              {result.error ? (
+                <p className="text-red-500">{result.error}</p>
+              ) : (
+                <ul className="list-disc pl-5">
+                  <li><strong>Score:</strong> {result.score}</li>
+                  <li><strong>Tone:</strong> {result.tone}</li>
+                  <li><strong>Emotional Triggers:</strong> {result.emotional_triggers.join(", ")}</li>
+                  <li><strong>Potential Impact:</strong> {result.potential_impact}</li>
+                </ul>
+              )}
             </div>
           </div>
         )}

@@ -37,36 +37,39 @@ async def generate_tweet(request: TweetGenerationRequest):
             detail=f"Error generating tweet: {str(e)}"
         )
 
-@router.post("/generate-batch", response_model=List[GenerationResponse])
-async def generate_multiple_tweets(
-    request: TweetGenerationRequest,
-    count: Optional[int] = 3
-):
-    """
-    Generate multiple tweet variations for the same parameters.
+# @router.post("/generate-batch")
+# async def generate_multiple_tweets(
+#     request: TweetGenerationRequest,
+#     count: int = 3
+# ):
+#     """
+#     Generate multiple tweet variations for the same parameters.
     
-    Args:
-        request: Tweet generation parameters
-        count: Number of variations to generate (default: 3)
+#     Args:
+#         request: Tweet generation parameters
+#         count: Number of variations to generate (default: 3)
         
-    Returns:
-        List of GenerationResponse objects
-    """
+#     Returns:
+#         List of GenerationResponse objects
+#     """
+#     try:
+#         crew_manager = CrewManager()
+#         results = []
+#         for _ in range(count):
+#             result = await crew_manager.generate_viral_tweet(request.topic, request.tone, request.target_audience)
+#             results.append(result.dict())
+#         return {"tweets": results}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error generating multiple tweets: {str(e)}")
+@router.post("/generate-batch")
+async def generate_batch_tweets(request: TweetGenerationRequest, count: int = 3):
     try:
-        results = []
-        for _ in range(count):
-            result = await crew_manager.generate_viral_tweet(
-                request.topic,
-                request.tone,
-                request.target_audience
-            )
-            results.append(result)
-        return results
+        crew_manager = CrewManager()
+        results = await crew_manager.generate_batch_tweets(request.topic, request.tone, request.target_audience, count)
+        return {"tweets": [r.dict() for r in results]}
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error generating multiple tweets: {str(e)}"
-        )
+        print(f"Batch generation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error generating multiple tweets: {str(e)}")
 
 @router.get("/trending-topics", response_model=List[TrendingTopic])
 async def get_trending_topics():

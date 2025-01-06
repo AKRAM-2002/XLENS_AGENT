@@ -7,13 +7,16 @@ Defines Pydantic models for request/response validation
 
 class TweetAnalysisRequest(BaseModel):
     tweet_text: str
-
+class FactCheckRequest(BaseModel):
+    tweet_text: str
 class FactCheckResult(BaseModel):
     accuracy_score: float
     verified_claims: List[str]
     unverified_claims: List[str]
     evidence: Dict[str, str]
 
+class SentimentRequest(BaseModel):
+    tweet_text: str
 class SentimentResult(BaseModel):
     score: float
     tone: str

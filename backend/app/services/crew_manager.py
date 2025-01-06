@@ -4,9 +4,13 @@ from .ollama_client import OllamaClient
 from app.api.models.schemas import (
     AnalysisResponse, 
     GenerationResponse, 
-    TrendingTopic
+    TrendingTopic,
+    FactCheckResult,
+    SentimentResult
 )
 import json
+from typing import List
+import asyncio, re
 
 class CrewManager:
     def __init__(self):
@@ -52,6 +56,8 @@ class CrewManager:
 
         return fact_check_task, sentiment_task
 
+
+
     def _create_generation_task(self, topic: str, tone: str, target_audience: str, content_generator_agent: Agent):
         return Task(
             description=f'Generate a viral tweet about {topic} with {tone} tone for {target_audience}',
@@ -59,10 +65,85 @@ class CrewManager:
             agent=content_generator_agent
         )
 
+    def fact_check_tweet(self, tweet_text: str) -> FactCheckResult:
+        fact_check_agent, _ = self._create_agents()
+        
+        fact_check_task = Task(
+            description=f"""Fact-check the following tweet and return a JSON object: "{tweet_text}"
+            The JSON must have exactly these fields:
+            {{
+                "accuracy_score": (float between 0-1),
+                "verified_claims": [list of strings],
+                "unverified_claims": [list of strings],
+                "evidence": {{key: value pairs of claims and evidence}}
+            }}""",
+            agent=fact_check_agent
+        )
+
+        crew = Crew(
+            agents=[fact_check_agent],
+            tasks=[fact_check_task],
+            verbose=True
+        )
+
+        result = crew.kickoff()
+        print(f"Raw result: {result}")  # Debugging: Print the raw result
+            
+        try:
+            # Remove comments and clean up the JSON string
+            cleaned_result = re.sub(r'#.*', '', result)  # Remove comments
+            cleaned_result = re.sub(r'\s+', ' ', cleaned_result).strip()  # Remove extra whitespace
+            cleaned_result = cleaned_result.replace("'", '"')  # Ensure double quotes for JSON
+            
+            # Try to parse the cleaned result
+            fact_check = json.loads(cleaned_result)
+            print(f"Parsed result: {fact_check}")  # Debugging: Print parsed result
+            return FactCheckResult(**fact_check)
+        except json.JSONDecodeError as e:
+            print(f"JSON Decode Error: {e}")
+            print(f"Failed to decode JSON: {cleaned_result}")
+            raise ValueError(f"Failed to parse fact-check response due to JSON decoding error: {e}")
+        except TypeError as e:
+            print(f"TypeError in parsing: {e}")
+            print(f"Attempted to parse: {cleaned_result}")
+            raise ValueError(f"TypeError occurred while creating FactCheckResult: {e}")
+        except Exception as e:
+            print(f"Unexpected error in fact_check_tweet: {e}")
+            raise ValueError(f"An unexpected error occurred: {e}")
+    
+    def sentiment_analyze_tweet(self, tweet_text: str) -> SentimentResult:
+        _, sentiment_agent = self._create_agents()
+        
+        sentiment_task = Task(
+            description=f"""Analyze the sentiment of the following tweet and return a JSON object: "{tweet_text}"
+            The JSON must have exactly these fields:
+            {{
+                "score": (float between 0-1),
+                "tone": (string),
+                "emotional_triggers": [list of strings],
+                "potential_impact": (string)
+            }}""",
+            agent=sentiment_agent
+        )
+
+        crew = Crew(
+            agents=[sentiment_agent],
+            tasks=[sentiment_task],
+            verbose=True
+        )
+
+        result = crew.kickoff()
+        
+        try:
+            sentiment = json.loads(result.split('Final Answer:')[-1].strip())
+            return SentimentResult(**sentiment)
+        except (ValueError, json.JSONDecodeError):
+            raise ValueError("Failed to parse sentiment analysis response")
+
+
     def analyze_tweet(self, tweet_text: str) -> AnalysisResponse:
         fact_check_agent, sentiment_agent = self._create_agents()
         
-
         fact_check_task = Task(
             description=f"""Fact-check the following tweet and return a JSON object: "{tweet_text}"
             The JSON must have exactly these fields:
@@ -96,29 +177,60 @@ class CrewManager:
 
         result = crew.kickoff()
         
+        # Split the result into fact-checking and sentiment analysis
         try:
-            parsed_result = json.loads(result)
-            return AnalysisResponse(**parsed_result)
-        except json.JSONDecodeError:
-            raise ValueError("Failed to parse crew response")
+            # If we expect only one JSON object per agent, split by agent response
+            fact_check_part, sentiment_part = result.split('\n\n')
+            fact_check = json.loads(fact_check_part.split('Final Answer:')[-1].strip())
+            sentiment = json.loads(sentiment_part.split('Final Answer:')[-1].strip())
+            return AnalysisResponse(fact_check=FactCheckResult(**fact_check), sentiment=SentimentResult(**sentiment))
+        except ValueError:
+            # If the above fails, try parsing the entire result as one JSON object (in case of unexpected format)
+            try:
+                full_result = json.loads(result)
+                return AnalysisResponse(**full_result)
+            except json.JSONDecodeError:
+                raise ValueError("Failed to parse crew response")
 
     async def generate_viral_tweet(self, topic: str, tone: str, target_audience: str) -> GenerationResponse:
-            _, _, content_generator_agent = self._create_agents()
-            generation_task = self._create_generation_task(
-                topic, tone, target_audience, content_generator_agent
-            )
+        _, _, content_generator_agent = self._create_agents()
+        generation_task = self._create_generation_task(
+            topic, tone, target_audience, content_generator_agent
+        )
+        
+        crew = Crew(
+            agents=[content_generator_agent],
+            tasks=[generation_task],
+            verbose=True
+        )
+        
+        result = crew.kickoff()
+        
+        try:
+        # Clean up the result if it contains comments or unexpected characters
+            json_str = self._clean_json_string(result)
+            parsed_result = json.loads(json_str)
+            return GenerationResponse(**parsed_result)
+        except json.JSONDecodeError as e:
+            print(f"Error parsing result: {e}")
+            raise ValueError("Failed to parse generation response") from e
     
-            crew = Crew(
-                agents=[content_generator_agent],
-                tasks=[generation_task],
-                verbose=True
-            )
-    
-            result = crew.kickoff()
-            
-            try:
-                parsed_result = json.loads(result)
-                return GenerationResponse(**parsed_result)
-            except json.JSONDecodeError:
-                raise ValueError("Failed to parse generation response")
-    
+    def _clean_json_string(self, result):
+        # Clean up the string to remove comments, extra spaces, etc., before JSON parsing
+        if hasattr(result, 'output'):
+            json_str = result.output
+        else:
+            json_str = str(result)
+        
+        # Remove comments; this is very simplistic and might need adjustments
+        json_str = re.sub(r'//.*', '', json_str)
+        # Remove extra whitespace and newlines
+        json_str = re.sub(r'\s+', ' ', json_str).strip()
+        # Ensure double quotes for JSON
+        json_str = json_str.replace("'", '"')
+        
+        return json_str
+    async def generate_batch_tweets(self, topic: str, tone: str, target_audience: str, count: int) -> list[GenerationResponse]:
+        coroutines = [self.generate_viral_tweet(topic, tone, target_audience) for _ in range(count)]
+        results = await asyncio.gather(*coroutines)
+        return results

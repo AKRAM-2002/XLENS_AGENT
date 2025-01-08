@@ -65,8 +65,50 @@ class CrewManager:
             agent=content_generator_agent
         )
 
+    def _clean_response(self, response):
+        # Function to parse and remove redundancy from the response
+        try:
+            # Ensure the response is a string if it's not already
+            if not isinstance(response, str):
+                response = str(response)
+            
+            # Remove comments from the JSON string
+            cleaned_response = re.sub(r'//.*', '', response)
+            
+            # Remove any extra whitespace and ensure proper JSON formatting
+            cleaned_response = re.sub(r'\s+', ' ', cleaned_response).strip()
+            
+            # Handle the accuracy_score formatting
+            # Since null is not a valid float in JSON, we'll convert it to 0.0 or another appropriate value
+            cleaned_response = re.sub(r'"accuracy_score":\s*null', '"accuracy_score": 0.0', cleaned_response)
+
+            # Handling the evidence field which should be key-value pairs
+            # Assuming the evidence field should have a structure like {"claim": "evidence detail"}
+            # This regex will attempt to add a key if one is missing in the evidence field
+            evidence_pattern = r'"evidence":\s*(\{([^}]*)\})'
+            evidence_match = re.search(evidence_pattern, cleaned_response)
+            if evidence_match:
+                evidence_content = evidence_match.group(2)
+                if not re.search(r'"[^"]*":', evidence_content):
+                    # If there's no key in evidence, we add a default key
+                    cleaned_response = cleaned_response.replace(
+                        evidence_match.group(1),
+                        f'{{"general": "{evidence_content.strip().replace('"', '\\"')}"}}'
+                    )
+            
+            # Parse the cleaned JSON string
+            parsed = json.loads(cleaned_response)
+            return parsed
+        except json.JSONDecodeError as e:
+            print(f"JSON Decode Error: {e}")
+            print(f"Failed to decode JSON: {cleaned_response}")
+            return response  # Return raw response if JSON parsing fails
+        except Exception as e:
+            print(f"Unexpected error in _clean_response: {e}")
+            return response
+    
     def fact_check_tweet(self, tweet_text: str) -> FactCheckResult:
-        fact_check_agent, _ = self._create_agents()
+        fact_check_agent, _, _ = self._create_agents()
         
         fact_check_task = Task(
             description=f"""Fact-check the following tweet and return a JSON object: "{tweet_text}"
@@ -77,6 +119,7 @@ class CrewManager:
                 "unverified_claims": [list of strings],
                 "evidence": {{key: value pairs of claims and evidence}}
             }}""",
+            expected_output="""A JSON object containing accuracy_score, verified_claims, unverified_claims, and evidence.""",
             agent=fact_check_agent
         )
 
@@ -90,13 +133,9 @@ class CrewManager:
         print(f"Raw result: {result}")  # Debugging: Print the raw result
             
         try:
-            # Remove comments and clean up the JSON string
-            cleaned_result = re.sub(r'#.*', '', result)  # Remove comments
-            cleaned_result = re.sub(r'\s+', ' ', cleaned_result).strip()  # Remove extra whitespace
-            cleaned_result = cleaned_result.replace("'", '"')  # Ensure double quotes for JSON
-            
-            # Try to parse the cleaned result
-            fact_check = json.loads(cleaned_result)
+            # Use the cleaning function to handle the JSON response
+            cleaned_result = self._clean_response(result)
+            fact_check = json.loads(json.dumps(cleaned_result))  # Ensure it's a JSON object
             print(f"Parsed result: {fact_check}")  # Debugging: Print parsed result
             return FactCheckResult(**fact_check)
         except json.JSONDecodeError as e:
@@ -110,7 +149,7 @@ class CrewManager:
         except Exception as e:
             print(f"Unexpected error in fact_check_tweet: {e}")
             raise ValueError(f"An unexpected error occurred: {e}")
-    
+
     def sentiment_analyze_tweet(self, tweet_text: str) -> SentimentResult:
         _, sentiment_agent = self._create_agents()
         

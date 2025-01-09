@@ -84,4 +84,4 @@ This project is open-sourced under the [MIT License](LICENSE).
 
 ---
 
-**Developed by Akram Boutzouga** - Connect with me on [X (formerly Twitter)](https://twitter.com/akramboutzouga) or explore my other projects on [GitHub](https://github.com/yourusername).
+**Developed by Akram Boutzouga** - Connect with me on [X (formerly Twitter)](https://x.com/akramboutzouga) or explore my other projects on [GitHub](https://github.com/AKRAM-2002).
